@@ -1,78 +1,85 @@
-"""
-=======================================================
-3D voxel / volumetric plot with cylindrical coordinates
-=======================================================
-
-Demonstrates using the *x*, *y*, *z* parameters of `.Axes3D.voxels`.
-"""
 
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 
-import matplotlib.colors
+# Create meshgrids
+n = 16 # n=16: 16807/35937 ie (33, 33, 33) Voxels size:0.200, Sphere radius: 3.300
+#n =  8  # n= 8: 2312/4913 ie (17, 17, 17) Voxels size:0.200, Sphere radius: 1.700
+#n =  4 # n= 4: 363/729 ie (9, 9, 9) Voxels size:0.200, Sphere radius: 0.900
+#n =  2 # n= 2: 77/125 ie (5, 5, 5) Voxels size:0.200, Sphere radius: 0.500
 
+nV = 2*n + 1 # nb of voxels per axe
+d = 0.2  # dim of voxel
+hd = d / 2
+dMin = -(n+0.5) * d
+Rmax = d * n + hd # max sphere radius
+val0s = [dMin+ d*i for i in range(nV+1)]
 
-def midpoints(x):
-    sl = ()
-    for i in range(x.ndim):
-        x = (x[sl + np.index_exp[:-1]] + x[sl + np.index_exp[1:]]) / 2.0
-        sl += np.index_exp[:]
-    return x
+# for voxels origins
+x0 = np.array(val0s, dtype=np.float32)
+y0 = np.array(val0s, dtype=np.float32)
+z0 = np.array(val0s, dtype=np.float32) 
+print(f"{d=:5.3f}, {x0.shape=}: {x0=}")
+X0, Y0, Z0 = np.meshgrid(x0, y0, z0, indexing='ij')
+print(f"{X0.shape=}: {X0[0,0,0]=}")
 
-# prepare some coordinates, and attach rgb values to each
-if 0:
-    r, theta, z = np.mgrid[0:1:11j, 0:np.pi*2:25j, -0.5:0.5:11j]
-    x = r*np.cos(theta)
-    y = r*np.sin(theta)
-else:
-    x = np.linspace(-1., 1., 7)
-    y = np.linspace(-1., 1., 6)
-    z = np.linspace(-1., 1., 5)
+# for voxels Center
+xc = x0[:-1] + hd
+yc = y0[:-1] + hd
+zc = z0[:-1] + hd
+print(f"{xc.shape=}: {xc[0]=}")
+Xc, Yc, Zc = np.meshgrid(xc, yc, zc, indexing='ij')
+print(f"{Xc.shape=}: {Xc[0,0,0]=}")
 
-    X, Y, Z = np.meshgrid(x, y, z, indexing='ij')
-    R = np.sqrt(X**2 + Y**2 + Z**2)
-    print(f"{R.shape=}")
+R = np.sqrt(Xc**2 + Yc**2 + Zc**2)
+print(f"{R.shape=}")
 
-if 0:
-    rc, thetac, zc = midpoints(r), midpoints(theta), midpoints(z)
-else:
-    Xc, Yc, Zc = X, Y, Z
+axes = list(R.shape)
 
-if 0:
-    # define a wobbly torus about [0.7, *, 0]
-    #sphere = (rc - 0.7)**2 + (zc + 0.2*np.cos(thetac*2))**2 < 0.2**2
-    rc_range = np.logical_and( 0.5 <= rc , rc  <= 0.7)
-    zc_range = np.logical_or ( zc  < -0.3, 0.3 <  zc )
-    sphere   = np.logical_and(rc_range, zc_range)
+# Create Data
+if 1: data = R <= Rmax # voxels of the sphere
+else: data = np.ones(axes, dtype=np.bool) # all cube
 
-sphere = R < 1.0
+xyzPos = np.logical_and( np.logical_and(Xc > 0.0, Yc < 0.0), Zc > 0.0)
+data = np.logical_and(data, np.logical_not(xyzPos)) 
+nx, ny, nz = data.shape
+nVoxels = nx * ny * nz
+nVoxelsInVol = data.sum()
 
-# combine the color components
-if 0:
-    hsv = np.zeros(sphere.shape + (3,))
-    hsv[..., 0] = thetac / (np.pi*2)
-    hsv[..., 1] = rc
-    hsv[..., 2] = zc + 0.5
-else:
-    hsv = np.zeros(sphere.shape + (3,))
-    hsv[..., 0] = 0.5 * (X + 1.0)
-    hsv[..., 1] = 0.5 * (Y + 1.0)
-    hsv[..., 2] = 0.5 * (Z + 1.0)
-colors = matplotlib.colors.hsv_to_rgb(hsv)
+title = f"{n=:2d}: {nVoxelsInVol}/{nVoxels} ie {data.shape} Voxels size:{d:.3f}, Sphere radius:{Rmax:6.3f}"
+print(f"{title=}")
 
-# and plot everything
-ax = plt.figure().add_subplot(projection='3d')
-if 0:
-    ax.voxels(x, y, z, sphere,
-              facecolors=colors,
-              edgecolors=np.clip(2*colors - 0.5, 0, 1),  # brighter
-              linewidth=0.5)
-else:
-    print(f"{X.shape=}, {Y.shape=}, {Z.shape=}, {sphere.shape=}, {colors.shape=}")
-    ax.voxels(X, Y, Z, R < 1.0) #,
-              #facecolors=colors,
-              #edgecolors=np.clip(2*colors - 0.5, 0, 1),  # brighter
-              #linewidth=0.5)
+alpha = 0.8 # Control Transparency
+# Colours of voxels
+Colors = (  (1, 0, 0, alpha),  # red
+            (0, 1, 0, alpha),  # green
+            (0, 0, 1, alpha),  # blue
+            (1, 1, 0, alpha),  # yellow
+            (1, 1, 1, alpha),  # grey
+         )
+         
+nColors = len(Colors)
+Colors = np.array(Colors, dtype=np.float32)
+colorsShape = list(R.shape) + [4] # 4 = len(rgba)
+colors = np.zeros(colorsShape, dtype=np.float32) 
+#for i in range(colorsShape[0]): colors[i] = Colors[i%nColors]# axeX
+
+Ridx = (R/d).astype(np.uint16) % nColors
+print(f"{Ridx.shape=} {Ridx.dtype}")
+print(Ridx)
+
+print(f"{Ridx.shape=} {Ridx.dtype}:{Ridx}")
+colors = Colors[Ridx]  
+print(f"{colors.shape=}")
+
+# Plot figure
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
+
+ax.voxels(X0, Y0, Z0, data, facecolors=colors, linewidth=0.2, edgecolors='k')
+ax.set_title(title)
+ax.axis("equal")
 
 plt.show()
 
